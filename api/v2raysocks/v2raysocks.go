@@ -57,7 +57,7 @@ func New(apiConfig *api.Config) *APIClient {
 			log.Print(v.Err)
 		}
 	})
-	
+
 	// Create Key for each requests
 	client.SetQueryParams(map[string]string{
 		"node_id": strconv.Itoa(apiConfig.NodeID),
@@ -163,7 +163,7 @@ func (c *APIClient) GetNodeInfo() (nodeInfo *api.NodeInfo, err error) {
 		}).
 		ForceContentType("application/json").
 		Get(c.APIHost)
-		
+
 	// Etag identifier for a specific version of a resource. StatusCode = 304 means no changed
 	if res.StatusCode() == 304 {
 		return nil, errors.New(api.NodeNotModified)
@@ -217,7 +217,7 @@ func (c *APIClient) GetUserList() (UserList *[]api.UserInfo, err error) {
 		}).
 		ForceContentType("application/json").
 		Get(c.APIHost)
-		
+
 	// Etag identifier for a specific version of a resource. StatusCode = 304 means no changed
 	if res.StatusCode() == 304 {
 		return nil, errors.New(api.UserNotModified)
@@ -422,11 +422,12 @@ func (c *APIClient) ParseSSNodeResponse(nodeInfoResponse *simplejson.Json) (*api
 
 // ParseV2rayNodeResponse parse the response for the given nodeInfo format
 func (c *APIClient) ParseV2rayNodeResponse(nodeInfoResponse *simplejson.Json) (*api.NodeInfo, error) {
-	var path, host, serviceName string
+	var path, serviceName string
+	var host []string
 	var header json.RawMessage
 	var enableTLS bool
 	var enableVless bool
-	var enableReality  bool
+	var enableReality bool
 	var alterID uint16 = 0
 
 	tmpInboundInfo := nodeInfoResponse.Get("inbounds").MustArray()
@@ -439,7 +440,7 @@ func (c *APIClient) ParseV2rayNodeResponse(nodeInfoResponse *simplejson.Json) (*
 	switch transportProtocol {
 	case "ws":
 		path = inboundInfo.Get("streamSettings").Get("wsSettings").Get("path").MustString()
-		host = inboundInfo.Get("streamSettings").Get("wsSettings").Get("headers").Get("Host").MustString()
+		host = []string{inboundInfo.Get("streamSettings").Get("wsSettings").Get("headers").Get("Host").MustString()}
 	case "grpc":
 		if data, ok := inboundInfo.Get("streamSettings").Get("grpcSettings").CheckGet("serviceName"); ok {
 			serviceName = data.MustString()
@@ -452,12 +453,14 @@ func (c *APIClient) ParseV2rayNodeResponse(nodeInfoResponse *simplejson.Json) (*
 				header = httpHeader
 			}
 		}
-
+	case "http":
+		path = inboundInfo.Get("streamSettings").Get("httpSettings").Get("path").MustString()
+		host = inboundInfo.Get("streamSettings").Get("httpSettings").Get("Host").MustStringArray()
 	}
 
+	enableVless = inboundInfo.Get("protocol").MustString() == "vless"
 	enableTLS = inboundInfo.Get("streamSettings").Get("security").MustString() == "tls"
-	enableVless = inboundInfo.Get("streamSettings").Get("security").MustString() == "reality"
-	enableReality = enableVless
+	enableReality = inboundInfo.Get("streamSettings").Get("security").MustString() == "reality"
 
 	realityConfig := new(api.REALITYConfig)
 	if enableVless {
