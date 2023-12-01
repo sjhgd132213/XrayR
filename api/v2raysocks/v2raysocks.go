@@ -422,8 +422,7 @@ func (c *APIClient) ParseSSNodeResponse(nodeInfoResponse *simplejson.Json) (*api
 
 // ParseV2rayNodeResponse parse the response for the given nodeInfo format
 func (c *APIClient) ParseV2rayNodeResponse(nodeInfoResponse *simplejson.Json) (*api.NodeInfo, error) {
-	var path, serviceName string
-	var host []string
+	var path, host, serviceName string
 	var header json.RawMessage
 	var enableTLS bool
 	var enableVless bool
@@ -440,7 +439,7 @@ func (c *APIClient) ParseV2rayNodeResponse(nodeInfoResponse *simplejson.Json) (*
 	switch transportProtocol {
 	case "ws":
 		path = inboundInfo.Get("streamSettings").Get("wsSettings").Get("path").MustString()
-		host = []string{inboundInfo.Get("streamSettings").Get("wsSettings").Get("headers").Get("Host").MustString()}
+		host = inboundInfo.Get("streamSettings").Get("wsSettings").Get("headers").Get("Host").MustString()
 	case "grpc":
 		if data, ok := inboundInfo.Get("streamSettings").Get("grpcSettings").CheckGet("serviceName"); ok {
 			serviceName = data.MustString()
@@ -455,7 +454,18 @@ func (c *APIClient) ParseV2rayNodeResponse(nodeInfoResponse *simplejson.Json) (*
 		}
 	case "http":
 		path = inboundInfo.Get("streamSettings").Get("httpSettings").Get("path").MustString()
-		host = inboundInfo.Get("streamSettings").Get("httpSettings").Get("Host").MustStringArray()
+		hostInterface := inboundInfo.Get("streamSettings").Get("httpSettings").Get("Host").Interface()
+		switch hostInterface.(type) {
+		case string:
+			host = hostInterface.(string)
+		case []interface{}:
+			// Handle the case where Host is an array of strings
+			hostArray := make([]string, len(hostInterface.([]interface{})))
+			for i, v := range hostInterface.([]interface{}) {
+				hostArray[i] = fmt.Sprint(v)
+			}
+			host = strings.Join(hostArray, ",")
+		}
 	}
 
 	enableVless = inboundInfo.Get("protocol").MustString() == "vless"
